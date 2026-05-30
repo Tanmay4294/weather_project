@@ -1,5 +1,6 @@
 import datetime
 import requests
+import time
 
 API_Key = "e9845d6ba9d0e5920d8453e13221800c"
 Latitude = 28.469709
@@ -77,31 +78,41 @@ def get_user_choice() -> str:
     return get_user_choice()
 
 
+def get_current_date() -> datetime.date:
+    now = time.localtime()
+    return datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
+
+
+def choose_today_time(available_times: list[str]) -> str:
+    print("Available times for today:")
+    for t in available_times:
+        print(f"  - {t}")
+    while True:
+        user_time = input("Enter the time you want to know (HH:MM): ").strip()
+        if user_time in available_times:
+            return user_time
+        print("Wrong time. Please enter one of the available times exactly as shown.")
+
+
 choice = get_user_choice()
 
-today = datetime.date.today()
+today = get_current_date()
 if choice == "5":
     print("5-day weather report at 06:00:")
     for item in morning_forecasts[:5]:
         print_forecast(item)
 else:
-    today_forecasts = [
-        item for item in morning_forecasts
+    today_all = [
+        item for item in data.get("list", [])
         if item_date(item) == today
     ]
-    if today_forecasts:
-        print(f"Today's weather report at 06:00 ({today}):")
-        for item in today_forecasts:
-            print_forecast(item)
-    else:
-        today_all = [
-            item for item in data.get("list", [])
-            if item_date(item) == today
-        ]
-        if today_all:
-            print(f"No 06:00 entry found for today ({today}). Showing today's available forecasts instead:")
-            for item in today_all:
+    if today_all:
+        available_times = sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in today_all})
+        selected_time = choose_today_time(available_times)
+        print(f"Today's weather for {today} at {selected_time}:")
+        for item in today_all:
+            if parse_item_datetime(item).time().strftime("%H:%M") == selected_time:
                 print_forecast(item)
-        else:
-            print(f"No forecast entries found for today ({today}).")
+    else:
+        print(f"No forecast entries found for today ({today}).")
 
