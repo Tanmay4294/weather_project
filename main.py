@@ -68,47 +68,138 @@ def print_forecast(item: dict) -> None:
     print()
 
 
-def get_day_choice() -> int:
-    while True:
-        choice = input("Enter a day number 1-5 (1=today, 2=tomorrow, 3=day after tomorrow): ").strip()
-        if choice.isdigit():
-            day_number = int(choice)
-            if 1 <= day_number <= 5:
-                return day_number
-        print("Invalid selection. Please enter a number from 1 to 5.")
+import tkinter as tk
+from tkinter import messagebox
+
+def get_current_date() -> datetime.date:
+    now = time.localtime()
+    return datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
 
 
 def get_selected_date(day_number: int) -> datetime.date:
-    now = time.localtime()
-    today = datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
+    today = get_current_date()
     return today + datetime.timedelta(days=day_number - 1)
 
 
-def choose_time_for_date(available_times: list[str], date_text: str) -> str:
-    print(f"Available times for {date_text}:")
-    for t in available_times:
-        print(f"  - {t}")
-    while True:
-        user_time = input("Enter the time you want to know (HH:MM): ").strip()
-        if user_time in available_times:
-            return user_time
-        print("Wrong time. Please enter one of the available times exactly as shown.")
+def get_available_times(selected_date: datetime.date) -> list[str]:
+    matching_items = [
+        item for item in data.get("list", [])
+        if item_date(item) == selected_date
+    ]
+    return sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in matching_items})
 
 
-day_choice = get_day_choice()
-selected_date = get_selected_date(day_choice)
-selected_day_items = [
-    item for item in data.get("list", [])
-    if item_date(item) == selected_date
-]
+def get_forecasts_for_date_time(selected_date: datetime.date, selected_time: str) -> list[dict]:
+    return [
+        item for item in data.get("list", [])
+        if item_date(item) == selected_date and parse_item_datetime(item).time().strftime("%H:%M") == selected_time
+    ]
 
-if selected_day_items:
-    available_times = sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in selected_day_items})
-    selected_time = choose_time_for_date(available_times, selected_date.isoformat())
-    print(f"Weather for day {day_choice} ({selected_date}) at {selected_time}:")
-    for item in selected_day_items:
-        if parse_item_datetime(item).time().strftime("%H:%M") == selected_time:
-            print_forecast(item)
-else:
-    print(f"No forecast entries found for day {day_choice} ({selected_date}).")
+
+def clear_frame(frame: tk.Frame) -> None:
+    for widget in frame.winfo_children():
+        widget.destroy()
+
+
+def show_weather_details(selected_date: datetime.date, selected_time: str) -> None:
+    forecasts = get_forecasts_for_date_time(selected_date, selected_time)
+    clear_frame(button_frame)
+    title_label.config(text=f"Weather for {selected_date} at {selected_time}")
+
+    if not forecasts:
+        details_label.config(text="No forecast available for that time.")
+        back_button.grid(row=2, column=0, columnspan=2, pady=(10, 0))
+        return
+
+    text_lines = []
+    for item in forecasts:
+        weather = item["weather"][0]
+        main = item["main"]
+        summary = summarize_weather(weather["main"])
+        timestamp = parse_item_datetime(item)
+        text_lines.extend([
+            f"Date: {timestamp.date().isoformat()}",
+            f"Time: {timestamp.time().strftime('%H:%M')}",
+            f"Weather: {weather['main']} - {weather['description']}",
+            f"Condition: {summary}",
+            f"Temperature: {main['temp']} °C",
+            f"Feels like: {main['feels_like']} °C",
+            f"Humidity: {main['humidity']} %",
+            f"Pressure: {main['pressure']} hPa",
+            "",
+        ])
+    details_label.config(text="\n".join(text_lines).strip())
+    back_button.grid(row=2, column=0, columnspan=2, pady=(10, 0))
+
+
+def show_time_buttons(day_number: int) -> None:
+    selected_date = get_selected_date(day_number)
+    available_times = get_available_times(selected_date)
+    clear_frame(button_frame)
+    title_label.config(text=f"What time weather do you want to know for {selected_date}?")
+
+    if not available_times:
+        details_label.config(text=f"No forecast entries found for day {day_number} ({selected_date}).")
+        back_button.grid(row=2, column=0, columnspan=2, pady=(10, 0))
+        return
+
+    details_label.config(text="")
+    for index, time_option in enumerate(available_times):
+        btn = tk.Button(
+            button_frame,
+            text=time_option,
+            width=12,
+            command=lambda t=time_option, d=selected_date: show_weather_details(d, t)
+        )
+        btn.grid(row=index // 3, column=index % 3, padx=5, pady=5)
+    back_button.grid(row=2, column=0, columnspan=2, pady=(10, 0))
+
+
+def build_date_buttons() -> None:
+    clear_frame(button_frame)
+    title_label.config(text="Which day's weather do you want to know?")
+    details_label.config(text="")
+    back_button.grid_forget()
+
+    for day_number in range(1, 6):
+        selected_date = get_selected_date(day_number)
+        day_label = f"Day {day_number}\n({selected_date.isoformat()})"
+        btn = tk.Button(
+            button_frame,
+            text=day_label,
+            width=16,
+            height=2,
+            command=lambda d=day_number: show_time_buttons(d)
+        )
+        btn.grid(row=(day_number - 1) // 2, column=(day_number - 1) % 2, padx=8, pady=8)
+
+
+def start_gui() -> None:
+    global root, title_label, button_frame, details_label, back_button
+
+    root = tk.Tk()
+    root.title("Weather Report")
+    root.geometry("480x420")
+    root.resizable(False, False)
+
+    title_label = tk.Label(root, text="Which day's weather do you want to know?", font=("Arial", 14), wraplength=440)
+    title_label.pack(padx=10, pady=(15, 10))
+
+    button_frame = tk.Frame(root)
+    button_frame.pack(padx=10, pady=5)
+
+    details_label = tk.Label(root, text="", font=("Arial", 11), justify="left", anchor="w", wraplength=440)
+    details_label.pack(padx=10, pady=10, fill="both")
+
+    back_button = tk.Button(root, text="Back", width=12, command=build_date_buttons)
+
+    build_date_buttons()
+    root.mainloop()
+
+
+if __name__ == "__main__":
+    try:
+        start_gui()
+    except Exception as exc:
+        messagebox.showerror("Error", f"An error occurred: {exc}")
 
