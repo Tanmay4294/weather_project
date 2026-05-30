@@ -18,6 +18,25 @@ response.raise_for_status()
 
 data = response.json()
 
+WEATHER_SUMMARIES = {
+    "clear": "Sunny",
+    "sunny": "Sunny",
+    "rain": "Rainy",
+    "rainy": "Rainy",
+    "drizzle": "Rainy",
+    "thunderstorm": "Rainy",
+    "clouds": "Cloudy",
+    "cloudy": "Cloudy",
+    "mist": "Hazy",
+    "haze": "Hazy",
+    "fog": "Hazy",
+    "smoke": "Hazy",
+    "snow": "Snowy",
+    "sleet": "Snowy",
+}
+
+datetime_cache = {}
+
 morning_forecasts = [
     item for item in data.get("list", [])
     if item.get("dt_txt", "").endswith("06:00:00")
@@ -30,25 +49,46 @@ if not morning_forecasts:
 
 def summarize_weather(weather_main: str) -> str:
     condition = weather_main.lower()
-    if condition in {"clear", "sunny"}:
-        return "Sunny"
-    if condition in {"rain", "rainy", "drizzle", "thunderstorm"}:
-        return "Rainy"
-    if condition in {"clouds", "cloudy"}:
-        return "Cloudy"
-    if condition in {"mist", "haze", "fog", "smoke"}:
-        return "Hazy"
-    if condition in {"snow", "sleet"}:
-        return "Snowy"
-    return weather_main.capitalize()
+    return WEATHER_SUMMARIES.get(condition, weather_main.capitalize())
 
 
 def parse_item_datetime(item: dict) -> datetime.datetime:
-    return datetime.datetime.strptime(item["dt_txt"], "%Y-%m-%d %H:%M:%S")
+    timestamp_text = item["dt_txt"]
+    if timestamp_text not in datetime_cache:
+        datetime_cache[timestamp_text] = datetime.datetime.strptime(timestamp_text, "%Y-%m-%d %H:%M:%S")
+    return datetime_cache[timestamp_text]
 
 
 def item_date(item: dict) -> datetime.date:
     return parse_item_datetime(item).date()
+
+
+def build_forecast_index() -> tuple[dict[datetime.date, list[str]], dict[tuple[datetime.date, str], list[dict]]]:
+    times_by_date = {}
+    forecasts_by_date_time = {}
+
+    for item in data.get("list", []):
+        timestamp = parse_item_datetime(item)
+        selected_date = timestamp.date()
+        selected_time = timestamp.time().strftime("%H:%M")
+
+        if selected_date not in times_by_date:
+            times_by_date[selected_date] = set()
+        times_by_date[selected_date].add(selected_time)
+
+        key = (selected_date, selected_time)
+        if key not in forecasts_by_date_time:
+            forecasts_by_date_time[key] = []
+        forecasts_by_date_time[key].append(item)
+
+    sorted_times_by_date = {
+        selected_date: sorted(times)
+        for selected_date, times in times_by_date.items()
+    }
+    return sorted_times_by_date, forecasts_by_date_time
+
+
+TIMES_BY_DATE, FORECASTS_BY_DATE_TIME = build_forecast_index()
 
 
 def print_forecast(item: dict) -> None:
@@ -84,18 +124,11 @@ def get_selected_date(day_number: int) -> datetime.date:
 
 
 def get_available_times(selected_date: datetime.date) -> list[str]:
-    matching_items = [
-        item for item in data.get("list", [])
-        if item_date(item) == selected_date
-    ]
-    return sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in matching_items})
+    return list(TIMES_BY_DATE.get(selected_date, []))
 
 
 def get_forecasts_for_date_time(selected_date: datetime.date, selected_time: str) -> list[dict]:
-    return [
-        item for item in data.get("list", [])
-        if item_date(item) == selected_date and parse_item_datetime(item).time().strftime("%H:%M") == selected_time
-    ]
+    return list(FORECASTS_BY_DATE_TIME.get((selected_date, selected_time), []))
 
 
 def clear_frame(frame: tk.Frame) -> None:
