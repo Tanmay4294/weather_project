@@ -26,9 +26,24 @@ else:
         date_text = item["dt_txt"].split(" ")[0]
         weather = item["weather"][0]
         main = item["main"]
+        condition = weather["main"].lower()
+        if condition in {"clear", "sunny"}:
+            summary = "Sunny"
+        elif condition in {"rain", "rainy", "drizzle", "thunderstorm"}:
+            summary = "Rainy"
+        elif condition in {"clouds", "cloudy"}:
+            summary = "Cloudy"
+        elif condition in {"mist", "haze", "fog", "smoke"}:
+            summary = "Hazy"
+        elif condition in {"snow", "sleet"}:
+            summary = "Snowy"
+        else:
+            summary = weather["main"]
+
         print(f"Date: {date_text}")
         print(f"  Time: 06:00")
         print(f"  Weather: {weather['main']} - {weather['description']}")
+        print(f"  Condition: {summary}")
         print(f"  Temperature: {main['temp']} °C")
         print(f"  Feels like: {main['feels_like']} °C")
         print(f"  Humidity: {main['humidity']} %")
