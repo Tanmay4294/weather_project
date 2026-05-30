@@ -1,139 +1,15 @@
 import datetime
 import importlib
 import os
-import requests
-import time
-
-API_Key = "e9845d6ba9d0e5920d8453e13221800c"
-Latitude = 28.469709
-Longitude = 77.042641
-
-url = (
-    "https://api.openweathermap.org/data/2.5/forecast"
-    f"?lat={Latitude}&lon={Longitude}&appid={API_Key}&units=metric&lang=en"
-)
-
-response = requests.get(url)
-response.raise_for_status()
-
-data = response.json()
-
-WEATHER_SUMMARIES = {
-    "clear": "Sunny",
-    "sunny": "Sunny",
-    "rain": "Rainy",
-    "rainy": "Rainy",
-    "drizzle": "Rainy",
-    "thunderstorm": "Rainy",
-    "clouds": "Cloudy",
-    "cloudy": "Cloudy",
-    "mist": "Hazy",
-    "haze": "Hazy",
-    "fog": "Hazy",
-    "smoke": "Hazy",
-    "snow": "Snowy",
-    "sleet": "Snowy",
-}
-
-datetime_cache = {}
-
-morning_forecasts = [
-    item for item in data.get("list", [])
-    if item.get("dt_txt", "").endswith("06:00:00")
-]
-
-if not morning_forecasts:
-    print("No 06:00 forecast entries found in the API response.")
-    raise SystemExit
-
-
-def summarize_weather(weather_main: str) -> str:
-    condition = weather_main.lower()
-    return WEATHER_SUMMARIES.get(condition, weather_main.capitalize())
-
-
-def parse_item_datetime(item: dict) -> datetime.datetime:
-    timestamp_text = item["dt_txt"]
-    if timestamp_text not in datetime_cache:
-        datetime_cache[timestamp_text] = datetime.datetime.strptime(timestamp_text, "%Y-%m-%d %H:%M:%S")
-    return datetime_cache[timestamp_text]
-
-
-def item_date(item: dict) -> datetime.date:
-    return parse_item_datetime(item).date()
-
-
-def build_forecast_index() -> tuple[dict[datetime.date, list[str]], dict[tuple[datetime.date, str], list[dict]]]:
-    times_by_date = {}
-    forecasts_by_date_time = {}
-
-    for item in data.get("list", []):
-        timestamp = parse_item_datetime(item)
-        selected_date = timestamp.date()
-        selected_time = timestamp.time().strftime("%H:%M")
-
-        if selected_date not in times_by_date:
-            times_by_date[selected_date] = set()
-        times_by_date[selected_date].add(selected_time)
-
-        key = (selected_date, selected_time)
-        if key not in forecasts_by_date_time:
-            forecasts_by_date_time[key] = []
-        forecasts_by_date_time[key].append(item)
-
-    sorted_times_by_date = {
-        selected_date: sorted(times)
-        for selected_date, times in times_by_date.items()
-    }
-    return sorted_times_by_date, forecasts_by_date_time
-
-
-TIMES_BY_DATE, FORECASTS_BY_DATE_TIME = build_forecast_index()
-
-
-def print_forecast(item: dict) -> None:
-    timestamp = parse_item_datetime(item)
-    date_text = timestamp.date().isoformat()
-    time_text = timestamp.time().strftime("%H:%M")
-    weather = item["weather"][0]
-    main = item["main"]
-    summary = summarize_weather(weather["main"])
-
-    print(f"Date: {date_text}")
-    print(f"  Time: {time_text}")
-    print(f"  Weather: {weather['main']} - {weather['description']}")
-    print(f"  Condition: {summary}")
-    print(f"  Temperature: {main['temp']} °C")
-    print(f"  Feels like: {main['feels_like']} °C")
-    print(f"  Humidity: {main['humidity']} %")
-    print(f"  Pressure: {main['pressure']} hPa")
-    print()
-
-
 import tkinter as tk
 from tkinter import messagebox
 
-def get_current_date() -> datetime.date:
-    now = time.localtime()
-    return datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
-
-
-def get_selected_date(day_number: int) -> datetime.date:
-    today = get_current_date()
-    return today + datetime.timedelta(days=day_number - 1)
-
-
-def get_available_times(selected_date: datetime.date) -> list[str]:
-    return list(TIMES_BY_DATE.get(selected_date, []))
-
-
-def get_forecasts_for_date_time(selected_date: datetime.date, selected_time: str) -> list[dict]:
-    return list(FORECASTS_BY_DATE_TIME.get((selected_date, selected_time), []))
-
-
-def clear_frame(frame: tk.Frame) -> None:
-    for widget in frame.winfo_children():
-        widget.destroy()
+from clear_frame import clear_frame
+from get_available_times import get_available_times
+from get_forecasts_for_date_time import get_forecasts_for_date_time
+from get_selected_date import get_selected_date
+from parse_item_datetime import parse_item_datetime
+from summarize_weather import summarize_weather
 
 
 def show_weather_details(selected_date: datetime.date, selected_time: str) -> None:
@@ -164,8 +40,8 @@ def show_weather_details(selected_date: datetime.date, selected_time: str) -> No
             f"Time: {timestamp.time().strftime('%H:%M')}",
             f"Weather: {weather['main']} - {weather['description']}",
             f"Condition: {summary}",
-            f"Temperature: {main['temp']} °C",
-            f"Feels like: {main['feels_like']} °C",
+            f"Temperature: {main['temp']} Â°C",
+            f"Feels like: {main['feels_like']} Â°C",
             f"Humidity: {main['humidity']} %",
             f"Pressure: {main['pressure']} hPa",
             "",
@@ -303,4 +179,3 @@ if __name__ == "__main__":
         start_gui()
     except Exception as exc:
         messagebox.showerror("Error", f"An error occurred: {exc}")
-
