@@ -68,23 +68,24 @@ def print_forecast(item: dict) -> None:
     print()
 
 
-def get_user_choice() -> str:
-    choice = input("Enter '5' for 5-day weather report or 'today' for today's weather report: ").strip().lower()
-    if choice in {"5", "5 days", "5-day", "five", "five days", "five-day"}:
-        return "5"
-    if choice in {"today", "todays", "today's", "1", "one"}:
-        return "today"
-    print("Invalid choice. Please enter '5' or 'today'.")
-    return get_user_choice()
+def get_day_choice() -> int:
+    while True:
+        choice = input("Enter a day number 1-5 (1=today, 2=tomorrow, 3=day after tomorrow): ").strip()
+        if choice.isdigit():
+            day_number = int(choice)
+            if 1 <= day_number <= 5:
+                return day_number
+        print("Invalid selection. Please enter a number from 1 to 5.")
 
 
-def get_current_date() -> datetime.date:
+def get_selected_date(day_number: int) -> datetime.date:
     now = time.localtime()
-    return datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
+    today = datetime.date(now.tm_year, now.tm_mon, now.tm_mday)
+    return today + datetime.timedelta(days=day_number - 1)
 
 
-def choose_today_time(available_times: list[str]) -> str:
-    print("Available times for today:")
+def choose_time_for_date(available_times: list[str], date_text: str) -> str:
+    print(f"Available times for {date_text}:")
     for t in available_times:
         print(f"  - {t}")
     while True:
@@ -94,25 +95,20 @@ def choose_today_time(available_times: list[str]) -> str:
         print("Wrong time. Please enter one of the available times exactly as shown.")
 
 
-choice = get_user_choice()
+day_choice = get_day_choice()
+selected_date = get_selected_date(day_choice)
+selected_day_items = [
+    item for item in data.get("list", [])
+    if item_date(item) == selected_date
+]
 
-today = get_current_date()
-if choice == "5":
-    print("5-day weather report at 06:00:")
-    for item in morning_forecasts[:5]:
-        print_forecast(item)
+if selected_day_items:
+    available_times = sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in selected_day_items})
+    selected_time = choose_time_for_date(available_times, selected_date.isoformat())
+    print(f"Weather for day {day_choice} ({selected_date}) at {selected_time}:")
+    for item in selected_day_items:
+        if parse_item_datetime(item).time().strftime("%H:%M") == selected_time:
+            print_forecast(item)
 else:
-    today_all = [
-        item for item in data.get("list", [])
-        if item_date(item) == today
-    ]
-    if today_all:
-        available_times = sorted({parse_item_datetime(item).time().strftime("%H:%M") for item in today_all})
-        selected_time = choose_today_time(available_times)
-        print(f"Today's weather for {today} at {selected_time}:")
-        for item in today_all:
-            if parse_item_datetime(item).time().strftime("%H:%M") == selected_time:
-                print_forecast(item)
-    else:
-        print(f"No forecast entries found for today ({today}).")
+    print(f"No forecast entries found for day {day_choice} ({selected_date}).")
 
